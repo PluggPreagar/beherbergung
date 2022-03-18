@@ -2,23 +2,16 @@
 
 as discribed the projects bases of backend and separated frontend. The file system structure represents this.
 
-```graphviz
-digraph hierarchy {
-  // https://www.tonyballantyne.com/graphs.html
-  rankdir=LR;
-  // nodesep=1.0 // Increases the separation between nodes
-  // node [color=Red,fontname=Courier,shape=box] // Default node style
-  // edge [color=Blue, style=dashed] // Default lins style 
+```mermaid
+flowchart LR;
+    classDef focus fill:#f96;
+    classDef hide_ color:gray , stroke-dasharray: 5 5 , stroke:lightgray;
 
-  node [color=Red,shape=none] // Default node style
-  edge [color=grey, style=dashed] // Default lins style 
-
-
-  project->{backend frontend}
-  backend
-  frontend->{search submit}
-  {rank=same; search submit} // Put them on the same level
-}
+    p(project) --> b(backend)
+    p --> f(frontend)
+    f --> se(search)
+    f --> su(submit)
+    
 ```
 
 Whilst the backend runs on clojure the frontend is modeled in nodejs quering data unsing graphql-interface. 
@@ -75,8 +68,8 @@ flowchart LR;
     import --> backend
 ```
 
-Delivered formats are loaded into objects. In general we expect 2 dimensional data. **First step - Reading** A file contains multiple rows. Each row is a data point. Each row has multiple values. Imports as CSV support headlines. **Second step - Mapping** The internal 2-dimensional data grid is mapped with help of associative attribut naming. Further rules, checks and specialised functions are added - see 'offer_mapping'. This allows to handle customer specific representation of boolean values or time string.
+Delivered formats are loaded into objects. In general we expect 2 dimensional data. 
+**First step - Reading** A file contains multiple rows. Each row is a data point. Each row has multiple values. Imports as CSV support headlines. 
+**Second step - Mapping** The internal 2-dimensional data grid is mapped with help of associative attribut naming. Further rules, checks and specialised functions are added - see 'offer_mapping'. This allows to handle customer specific representation of boolean values or time string formats.
 
-
-
-
+Graphql allows a generic way to access the database. This way only mappers have to deal with the specific customer related data model. To allow merging or exchanging of differnt modeled data a further mapping will be applied. The,so called, key mapping generates a key/fingerprint to match data only key-attribut-tupels accross different data models by hash value. 
