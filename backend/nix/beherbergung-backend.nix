@@ -1,6 +1,6 @@
 {
-  pkgs ? import <nixpkgs> {},
-  buildMavenRepositoryFromLockFile ? (import (fetchTarball "https://github.com/johannesloetzsch/mvn2nix/archive/master.tar.gz") {}).buildMavenRepositoryFromLockFile,
+  pkgs,
+  buildMavenRepositoryFromLockFile,
   patchPublic ? null,
 }: let
   inherit (pkgs) lib stdenv jdk11_headless maven makeWrapper leiningen;
@@ -23,7 +23,7 @@
   beherbergung-backend-jar = mkDerivation rec {
     inherit src version pname name;
 
-    buildInputs = [jdk11_headless maven leiningen];
+    buildInputs = [jdk11_headless maven leiningen mavenRepository];
     patchPhase =
       if isNull patchPublic
       then ""
@@ -35,15 +35,14 @@
       echo '{:user {:offline? true :local-repo "${mavenRepository}"}}' > ~/.lein/profiles.clj
       lein uberjar
     '';
-
-    doCheck = true;
+    #doCheck = false;
     checkPhase = ''
       lein test
     '';
 
     installPhase = ''
       mkdir $out
-      cp target/${name}-standalone.jar $out/
+      cp target/${name}-standalone.jar $out/${pname}-standalone.jar
     '';
   };
 in
@@ -56,10 +55,7 @@ in
     ## TODO: JAVA_TOOL_OPTIONS should be generated from jvm-opts in project.clj and also update beherbergung.service
     export MALLOC_ARENA_MAX=2
     export JAVA_TOOL_OPTIONS='-Dclojure.tools.logging.factory=clojure.tools.logging.impl/slf4j-factory -Dorg.slf4j.simpleLogger.defaultLogLevel=warn -Dlog4j2.formatMsgNoLookups=true'
-    ${jdk11_headless}/bin/java -jar ${beherbergung-backend-jar}/${name}-standalone.jar $@ &
-
-    ## We write a pid-file, so the integration test knows how to kill the server
-    echo $! > .pid
+    ${jdk11_headless}/bin/java -jar ${beherbergung-backend-jar}/${pname}-standalone.jar $@
   '')
   {
     inherit mavenRepository;

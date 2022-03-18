@@ -8,8 +8,10 @@
     #nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.11";
 
-    alejandra.url = "github:kamadorueda/alejandra/1.1.0";
-    alejandra.inputs.nixpkgs.follows = "nixpkgs";
+    alejandra = {
+      url = "github:kamadorueda/alejandra/1.1.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     sops-nix = {
       url = "github:Mic92/sops-nix";
@@ -23,6 +25,14 @@
       url = "github:kirelagin/dns.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    mvn2nix = {
+      url = "github:fzakaria/mvn2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nixos-shell = {
+      url = "github:Mic92/nixos-shell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -32,6 +42,8 @@
     nix-deploy-git,
     dns,
     alejandra,
+    mvn2nix,
+    nixos-shell
   }: let
     system = "x86_64-linux";
     pkgs = import nixpkgs {inherit system;};
@@ -70,6 +82,13 @@
 
     packages.${system} = {
       devShell = self.devShell.${system}.inputDerivation;
+      backendUpdatedDeps = pkgs.callPackage ./backend/nix/tools/updated-deps.nix {
+        inherit (mvn2nix.legacyPackages.${system}) mvn2nix;
+      };
+      beherbergung-backend = pkgs.callPackage ./backend/nix/beherbergung-backend.nix {
+        inherit (mvn2nix.legacyPackages.${system}) buildMavenRepositoryFromLockFile;
+        inherit pkgs;
+      };
     };
 
     checks.${system} = {
@@ -91,7 +110,9 @@
           pkgs.yarn
           pkgs.hivemind
           pkgs.nodejs
+          pkgs.entr
           pkgs.nodePackages.prettier
+          nixos-shell.packages.${system}.nixos-shell
         ]
         ++ linters;
       shellHook = ''
@@ -99,9 +120,29 @@
       '';
     };
 
-    #defaultPackage.${system} = legacyPackages.${system}.nixos-deploy;
+    nixosModules = {
+      beherbergung = import ./deployment/modules/beherbergung.nix {
+        inherit (self.packages.${system}) beherbergung-backend;
+      };
+    };
 
     nixosConfigurations = {
+      # use nixos-shell --flake .#vm
+      vm = lib.makeOverridable nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          self.nixosModules.beherbergung
+          # dummy value to make ci happy
+          {
+             boot.loader.systemd-boot.enable = true;
+             fileSystems."/" = {
+               device = "/dev/disk/by-uuid/00000000-0000-0000-0000-000000000000";
+               fsType = "btrfs";
+             };
+          }
+        ];
+      };
+
       beherbergung-lifeline = nixpkgs.lib.nixosSystem (lib.mergeAttrs commonAttrs {
         modules =
           commonModules
