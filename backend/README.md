@@ -102,7 +102,7 @@ curl https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein.bat
 lein run
 ```
 
-### errors
+### issues
 
 windows can't handle ":"-file names. Plz disable spit file in backend/src/beherbergung/db/export.clj by `(spit file)))` to `#_(spit file)))`. Or consider setting database by setting `DB_SEED`.
 
