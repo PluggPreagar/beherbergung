@@ -5,8 +5,8 @@
   nixConfig.extra-trusted-public-keys = ["cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="];
 
   inputs = {
-    #nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.11";
+    # use 21.11-small for fast security updates
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.11-small";
 
     alejandra = {
       url = "github:kamadorueda/alejandra/1.1.0";
@@ -15,10 +15,6 @@
 
     sops-nix = {
       url = "github:Mic92/sops-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nix-deploy-git = {
-      url = "github:johannesloetzsch/nix-deploy-git/main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     dns = {
@@ -33,9 +29,19 @@
       url = "github:Mic92/nixos-shell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    naersk = {
+      url = "github:nix-community/naersk";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     deadnix = {
       url = "github:astro/deadnix";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.naersk.follows = "naersk";
+      inputs.fenix.follows = "fenix";
     };
   };
 
@@ -43,12 +49,12 @@
     self,
     nixpkgs,
     sops-nix,
-    nix-deploy-git,
     dns,
     alejandra,
     mvn2nix,
     nixos-shell,
     deadnix,
+    ...
   }: let
     system = "x86_64-linux";
     pkgs = import nixpkgs {inherit system;};
@@ -62,15 +68,6 @@
       };
     };
     commonModules = [
-      ./deployment/modules/nix.nix
-      ./deployment/modules/default.nix
-      sops-nix.nixosModules.sops
-      ./deployment/modules/sops.nix
-      ./deployment/modules/dns.nix
-      #./deployment/modules/monitoring/client.nix
-      ./deployment/modules/nginx/beherbergung.nix
-      #nix-deploy-git.nixosModule
-      #./deployment/modules/nix-deploy-git.nix
     ];
     linters = [
       # TODO: switch to alejandra from nixpkgs in 22.05
@@ -166,8 +163,9 @@
 
     nixosModules = {
       beherbergung = import ./deployment/modules/beherbergung.nix {
-        inherit (self.packages.${system}) beherbergung-backend;
+        inherit (self.packages.${system}) beherbergung-fullstack;
       };
+      beherbergung-demo = import ./deployment/modules/beherbergung-demo.nix;
     };
 
     nixosConfigurations = {
@@ -176,6 +174,7 @@
         inherit system;
         modules = [
           self.nixosModules.beherbergung
+          self.nixosModules.beherbergung-demo
           # dummy value to make ci happy
           {
             boot.loader.systemd-boot.enable = true;
@@ -184,15 +183,40 @@
               fsType = "btrfs";
             };
           }
+          # allow port 4000 from host machine
+          ({modulesPath, ...}: {
+            imports = [
+              (modulesPath + "/virtualisation/qemu-vm.nix")
+            ];
+            # port forward backend
+            virtualisation.forwardPorts = [
+              {
+                host.port = 4000;
+                guest.port = 4000;
+              }
+            ];
+            networking.firewall.allowedTCPPorts = [4000];
+          })
         ];
       };
+
+      beherbergung-demo = nixpkgs.lib.nixosSystem (lib.mergeAttrs commonAttrs {
+        modules =
+          commonModules
+          ++ [
+            ./deployment/hosts/beherbergung-demo/configuration.nix
+            self.nixosModules.beherbergung
+            self.nixosModules.beherbergung-demo
+          ];
+      });
 
       beherbergung-lifeline = nixpkgs.lib.nixosSystem (lib.mergeAttrs commonAttrs {
         modules =
           commonModules
           ++ [
+            sops-nix.nixosModules.sops
             ./deployment/hosts/beherbergung-lifeline/configuration.nix
-            #./deployment/modules/nginx/beherbergung-lifeline.nix
+            ./deployment/modules/nginx/beherbergung-broenradio.nix
             #./deployment/modules/binarycache/client.nix
             #./deployment/modules/binarycache/server.nix
             #./deployment/modules/monitoring/server.nix
@@ -201,11 +225,9 @@
 
       beherbergung-warhelp = nixpkgs.lib.nixosSystem (lib.mergeAttrs commonAttrs {
         modules =
-          # commonModules ++
-          [
+          commonModules
+          ++ [
             ./deployment/hosts/beherbergung-warhelp/configuration.nix
-            ./deployment/modules/nix.nix
-            ./deployment/modules/default.nix
           ];
       });
     };

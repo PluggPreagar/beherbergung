@@ -41,10 +41,12 @@ export const get_offers = gql`
       id
       id_tmp
       source
+      submission_count
       time_submission_str
       editor
       rw_contacted
       rw_offer_occupied
+      rw_note
       time_from_str
       time_duration_str
       beds
